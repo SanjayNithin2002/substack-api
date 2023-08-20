@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-
+const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const Users = require('../models/Users');
+const authenticate = require('../middleware/authenticate');
 
-router.get('/', (req, res) => {
+router.get('/', authenticate, (req, res) => {
     Users.find()
-        .select('_id name email password') 
+        .select('_id name email password')
         .exec()
         .then(users => {
             res.status(200).json({
@@ -17,7 +18,7 @@ router.get('/', (req, res) => {
                     password: user.password,
                     request: {
                         type: 'GET',
-                        url: 'http://localhost:3000/users/' + user._id
+                        url:  process.env.URL + '/users/' + user._id
                     }
                 }))
             });
@@ -29,14 +30,14 @@ router.get('/', (req, res) => {
         });
 });
 
-router.get('/:id', (req, res) => {
+router.get('/:id', authenticate, (req, res) => {
     Users.findById(req.params.id).select('_id name email password').exec()
         .then(user => {
             res.status(200).json({
                 user: user,
                 request: {
                     type: 'GET',
-                    url: 'http://localhost:3000/users/'
+                    url: process.env.URL + '/users/'
                 }
             })
         })
@@ -47,7 +48,7 @@ router.get('/:id', (req, res) => {
         });
 });
 
-router.post('/', (req, res) => {
+router.post('/signup', (req, res) => {
     const user = new Users({
         _id: new mongoose.Types.ObjectId(),
         name: req.body.name,
@@ -68,7 +69,45 @@ router.post('/', (req, res) => {
         });
 });
 
-router.patch('/:id', (req, res) => {
+router.post('/login', (req, res) => {
+    const email = req.body.email;
+    const password = req.body.password;
+    Users.find({ email: email }).exec()
+        .then(docs => {
+            if (docs.length === 0) {
+                res.status(404).json({
+                    error: 'User Not Found'
+                })
+            } else {
+                if (docs[0].password === password) {
+                    const token = jwt.sign({
+                        email: docs[0].email,
+                        id: docs[0]._id
+                    },
+                        process.env.JWT_KEY,
+                        {
+                            expiresIn: "1h"
+                        });
+                    res.status(200).json({
+                        message: 'Auth successful',
+                        token: token
+                    })
+                }
+                else {
+                    res.status(401).json({
+                        message: 'Auth failed'
+                    })
+                }
+            }
+        })
+        .catch(err => {
+            res.status(500).json({
+                error: err
+            })
+        });
+});
+
+router.patch('/:id', authenticate, (req, res) => {
     const updateOps = {};
     for (const ops of req.body) {
         updateOps[ops.propName] = ops.value;
@@ -87,13 +126,29 @@ router.patch('/:id', (req, res) => {
         });
 });
 
-router.delete('/:id', (req, res) => {
-    Users.findByIdAndDelete(req.params.id).exec()
+router.delete('/:id', authenticate, (req, res) => {
+    Users.findById(req.params.id).exec()
         .then(user => {
-            res.status(200).json({
-                message: 'User deleted successfully!',
-                user: user
-            });
+            console.log(req.userData)
+            if(user.email !== req.userData.email){
+                res.status(401).json({
+                    message: 'Auth failed'
+                });
+            }
+            else{
+                Users.findByIdAndDelete(req.params.id).exec()
+                .then(user => {
+                    res.status(200).json({
+                        message: 'User deleted successfully!',
+                        user: user
+                    });
+                })
+                .catch(err => {
+                    res.status(500).json({
+                        error: err
+                    })
+                });
+            }
         })
         .catch(err => {
             res.status(500).json({

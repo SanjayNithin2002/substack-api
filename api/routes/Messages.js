@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-
+const authenticate = require('../middleware/authenticate');
 const mongoose = require('mongoose');
 const Messages = require('../models/Messages');
 
-router.get('/', (req, res) => {
+router.get('/', authenticate, (req, res) => {
     Messages.find().populate('user').exec()
         .then(messages => {
             res.status(200).json({
@@ -13,7 +13,7 @@ router.get('/', (req, res) => {
                         message: message,
                         request: {
                             type: 'GET',
-                            url: 'http://localhost:3000/messages/' + message._id
+                            url: process.env.URL + '/messages/' + message._id
                         }
                     }
                 })
@@ -26,14 +26,14 @@ router.get('/', (req, res) => {
         });
 });
 
-router.get('/:id', (req, res) => {
+router.get('/:id', authenticate, (req, res) => {
     Messages.findById(req.params.id).populate('user').exec()
         .then(message => {
             res.status(200).json({
                 message: message,
                 request: {
                     type: 'GET',
-                    url: 'http://localhost:3000/messages/'
+                    url: process.env.URL + '/messages/'
                 }
             })
         })
@@ -44,7 +44,7 @@ router.get('/:id', (req, res) => {
         });
 });
 
-router.get('/users/:id', (req, res) => {
+router.get('/users/:id', authenticate, (req, res) => {
     Messages.find({ user: req.params.id }).populate('user').exec()
         .then(messages => {
             res.status(200).json({
@@ -53,7 +53,7 @@ router.get('/users/:id', (req, res) => {
                         message: message,
                         request: {
                             type: 'GET',
-                            url: 'http://localhost:3000/messages/' + message._id
+                            url: process.env.URL + '/messages/' + message._id
                         }
                     }
                 })
@@ -66,7 +66,7 @@ router.get('/users/:id', (req, res) => {
         });
 });
 
-router.post('/', (req, res) => {
+router.post('/', authenticate, (req, res) => {
     const message = new Messages({
         _id: new mongoose.Types.ObjectId(),
         user: req.body.user,
@@ -88,7 +88,7 @@ router.post('/', (req, res) => {
         });
 });
 
-router.patch('/:id', (req, res) => {
+router.patch('/:id', authenticate, (req, res) => {
     const updateOps = {};
     for (const ops of req.body) {
         updateOps[ops.propName] = ops.value;
@@ -107,7 +107,7 @@ router.patch('/:id', (req, res) => {
         });
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', authenticate, (req, res) => {
     Messages.findByIdAndDelete(req.params.id).exec()
         .then(message => {
             res.status(200).json({
